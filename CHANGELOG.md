@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cross-reference-index 10-K item lookups returned raw HTML** — for filers that map SEC items through a "FORM 10-K CROSS-REFERENCE INDEX" table instead of `Item N` headings (CITIGROUP INC, `0000831001-23-000037`), `obj['Item 7A']` returned **12,070,332 chars of raw source HTML** — 14x the filing's own extracted full text (859,373 chars), enough to blow an LLM context window. Section detection finds no items (no headings, no per-item anchors), so the lookup falls to the cross-reference index, whose page-range extraction sliced raw `self.html[start:end]`; Item 7A spans ~200 heavily inline-styled pages. A new `CrossReferenceIndex.extract_item_text` renders each page-range slice to plain text and `TenK.__getitem__` uses it, so Item 7A now returns ~540K chars of text (under the filing's full-text length), like every other item lookup. `extract_item_content` keeps its raw-HTML contract for callers that want markup. GE and other cross-reference filers now return text too.
+
 ## [5.43.1] - 2026-07-27
 
 ### Fixed

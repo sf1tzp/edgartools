@@ -652,8 +652,13 @@ class TenK(CompanyReport):
         if self._cross_reference_index is not None:
             item_id = _CROSS_REF_ITEM_MAP.get(item_or_part)
             if item_id:
-                # Extract content using Cross Reference Index parser
-                item_text = self._cross_reference_index.extract_item_content(item_id)
+                # Extract *text* via the Cross Reference Index parser. Its
+                # extract_item_content returns raw page-range HTML — for a
+                # cross-reference filer like Citigroup, whose Item 7A spans ~200
+                # inline-styled pages, that is 12M chars of source markup (14x
+                # the filing's own text). extract_item_text renders it to text,
+                # like every other item lookup on this object (cluster-4 sweep).
+                item_text = self._cross_reference_index.extract_item_text(item_id)
                 if item_text:
                     # Successfully extracted via Cross Reference Index
                     item_text = item_text.rstrip()

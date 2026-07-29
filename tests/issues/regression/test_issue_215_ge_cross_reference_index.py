@@ -211,7 +211,15 @@ class TestIssue215TenKIntegration:
 
         assert directors is not None, \
             "tenk.directors_officers_and_governance should not return None for GE"
-        assert len(directors) > 5000, \
+        # Item 10 is a genuine incorporation-by-reference stub (~4K chars of
+        # text) pointing at the proxy statement. The old > 5000 threshold was
+        # calibrated against the raw page-range *HTML* the item lookup used to
+        # return; now that it returns extracted text, assert real text content
+        # rather than an inflated markup length (cluster-4 sweep).
+        assert '<' not in directors and '</' not in directors, \
+            "Item 10 should be extracted text, not raw HTML"
+        assert 'DIRECTORS' in directors.upper()
+        assert len(directors) > 1000, \
             f"Directors section should have content (got {len(directors)} chars)"
 
     def test_tenk_getitem_direct_access(self, ge_tenk):

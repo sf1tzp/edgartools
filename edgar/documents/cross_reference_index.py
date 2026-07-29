@@ -359,6 +359,12 @@ class CrossReferenceIndex:
 
         Returns:
             Extracted HTML content, or None if not found
+
+        Note:
+            Returns raw page-range *HTML*. User-facing item lookups should use
+            :meth:`extract_item_text` — a single item can span many heavily
+            inline-styled pages whose source markup dwarfs its text (see that
+            method), so returning HTML here to a text consumer is a defect.
         """
         ranges = self.get_page_ranges(item_id)
         if not ranges:
@@ -372,6 +378,60 @@ class CrossReferenceIndex:
                 contents.append(content)
 
         return '\n'.join(contents) if contents else None
+
+    # Whitespace tidy-up applied after stripping tags from a page-range slice:
+    # drop trailing spaces before newlines and collapse blank-line runs.
+    _TRAILING_WS = re.compile(r'[ \t]+\n')
+    _BLANK_RUN = re.compile(r'\n\s*\n\s*\n+')
+
+    @classmethod
+    def _slice_to_text(cls, html_slice: str) -> str:
+        """Render a page-range HTML slice to plain text.
+
+        The slice is raw source HTML cut at page-break boundaries, so it can
+        begin or end mid-tag and carry the filing's inline styling. lxml parses
+        it best-effort; we then take the text content and tidy whitespace.
+        """
+        from lxml import html as lxml_html
+        try:
+            node = lxml_html.fromstring(f'<div>{html_slice}</div>')
+        except Exception:
+            return ''
+        text = node.text_content() or ''
+        text = cls._TRAILING_WS.sub('\n', text)
+        text = cls._BLANK_RUN.sub('\n\n', text)
+        return text.strip()
+
+    def extract_item_text(self, item_id: str) -> Optional[str]:
+        """
+        Extract an Item's content as plain text.
+
+        Args:
+            item_id: Item identifier like "1A"
+
+        Returns:
+            Extracted text, or None if not found.
+
+        Text, not raw HTML: the page-range slices are un-stripped source markup,
+        and a single item can span many heavily inline-styled pages — Citigroup's
+        Item 7A covers ~200 pages whose raw HTML is 12M chars (14x the filing's
+        own extracted text, enough to blow an LLM context window) but only ~540K
+        chars of text. This is what ``TenK.__getitem__`` surfaces to the user, so
+        it must be text like every other item lookup.
+        """
+        ranges = self.get_page_ranges(item_id)
+        if not ranges:
+            return None
+
+        contents = []
+        for page_range in ranges:
+            html_slice = self.extract_content_by_page_range(page_range)
+            if html_slice:
+                text = self._slice_to_text(html_slice)
+                if text:
+                    contents.append(text)
+
+        return '\n\n'.join(contents) if contents else None
 
 
 def detect_cross_reference_index(html: str) -> bool:
